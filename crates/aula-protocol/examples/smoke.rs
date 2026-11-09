@@ -125,7 +125,7 @@ fn device_arg(args: &[String]) -> anyhow::Result<Option<DeviceId>> {
 /// `--allow` mirrors the app's remembered-devices list, so a receiver can be
 /// driven from the CLI before it has ever been committed to `protocol::KNOWN`.
 fn scan_options(args: &[String]) -> ScanOptions {
-    let allow = args
+    let allow: Vec<DeviceId> = args
         .iter()
         .enumerate()
         .filter(|(_, a)| *a == "--allow")
@@ -133,6 +133,7 @@ fn scan_options(args: &[String]) -> ScanOptions {
         .filter_map(|s| s.parse::<DeviceId>().ok())
         .collect();
     ScanOptions {
+        skip_probe: aula_protocol::f75::skip_probe_ids(&allow),
         allow,
         deep: args.iter().any(|a| a == "--deep"),
         include_non_keyboards: args.iter().any(|a| a == "--all"),

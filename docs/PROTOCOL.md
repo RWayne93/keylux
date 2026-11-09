@@ -432,6 +432,16 @@ The earlier statements about missing receiver readback describe the original
 implementation; the prohibition on writing foreign/default config blocks
 still applies.
 
+On 2026-11-09, two matching, checksum- and signature-validated live reads
+reported active mode `6`, with brightness `2`, speed `3`, and multicolor set.
+The same ordinary-mode parameter offsets apply. Keylux lists it as **Firmware
+mode 6** because its factory name and animation are unverified; no animated
+preview is supplied. Omitting this mode previously rejected the entire onboard
+read and blocked software playback, which first reads the mode for restoration.
+Other unknown IDs and invalid parameters remain rejected. For read-only
+diagnostics, `cargo run -p aula-protocol --example receiver_inspect` compares two
+validated configuration reads and prints the mode and lighting parameter table.
+
 ### Wired configuration
 
 Read `0x84`, write `0x04`, 128 bytes at address `00 00 01 00`. A valid block

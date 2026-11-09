@@ -307,8 +307,10 @@ fn diagnose(args: &[String]) -> anyhow::Result<()> {
 /// the GUI was last pinned to, so a user who picked their receiver in the app
 /// does not have to name it again here.
 fn scan_options(settings: &Settings) -> ScanOptions {
+    let allow = settings.allow_list();
     ScanOptions {
-        allow: settings.allow_list(),
+        skip_probe: aula_protocol::f75::skip_probe_ids(&allow),
+        allow,
         ..Default::default()
     }
 }
@@ -347,6 +349,11 @@ fn open_device(args: &[String]) -> anyhow::Result<Device> {
             if !opts.allow.contains(&id) {
                 opts.allow.push(id);
             }
+            // Naming a receiver must not hand it to the wired prober: a 520-byte
+            // feature report stalls it for the kernel's control timeout and
+            // takes its output-report channel down with it. See
+            // `aula_protocol::f75::skip_probe_ids`.
+            opts.skip_probe = aula_protocol::f75::skip_probe_ids(&opts.allow);
         }
     }
     let found = if option(args, "--openrgb")?.is_some() {

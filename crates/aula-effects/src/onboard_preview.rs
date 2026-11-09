@@ -137,7 +137,7 @@ mod tests {
         for &(mode, name) in EFFECTS {
             let a = frame(settings(mode), 0.1);
             let b = frame(settings(mode), 0.73);
-            if matches!(mode, 0 | 1 | 277) {
+            if matches!(mode, 0 | 1 | 6 | 277) {
                 assert_eq!(a, b, "{name}");
             } else {
                 assert_ne!(a, b, "{name} must animate");
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn unavailable_modes_clear_previous_frame_and_empty_layout_is_safe() {
-        for mode in [0, 277, 999] {
+        for mode in [0, 6, 277, 999] {
             let mut out = Frame::solid(126, Rgb::new(255, 255, 255));
             render(settings(mode), &PALETTE, 1.0, &keymap::layout(), &mut out);
             assert!(out.iter().all(|color| color.is_black()));

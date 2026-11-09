@@ -206,6 +206,15 @@ impl DeviceCandidate {
 pub struct ScanOptions {
     /// Extra ids to treat exactly like the built-in known table, from settings.
     pub allow: Vec<DeviceId>,
+    /// Allow-listed ids that must NOT be feature-report probed.
+    ///
+    /// A 2.4 GHz receiver is found by device id and speaks a protocol with no
+    /// feature reports at all, so probing it proves nothing and costs plenty:
+    /// a 520-byte feature report against its lighting collection stalls for the
+    /// kernel's ~5 s control timeout and knocks the vendor channel out, so the
+    /// scan that just listed the receiver leaves it unable to answer. Anything
+    /// here is resolved by [`crate::dongle::discover`] instead.
+    pub skip_probe: Vec<DeviceId>,
     /// Also probe hardware nothing recognises. User-initiated only: opening a
     /// vendor collection can take the handle away from another vendor's utility,
     /// so it must never happen on a timer.
@@ -347,11 +356,22 @@ fn targets(all: &[&DeviceInfo], spec: &ScanSpec<'_>) -> Vec<(DeviceId, Link, Con
                 .entry((id.vid, id.pid))
                 .or_insert((id, *link, Confidence::Known));
         } else if spec.opts.allow.contains(&id) {
-            // The user allow-listed this after a scan found it. The only reason
-            // Deliberately NOT Link::Dongle: that now selects the receiver's
-            // own protocol. Something reached here by confirming the wired
-            // config block is speaking the wired protocol, whatever it is
-            // plugged into.
+            // The user allow-listed this after a scan found it, which in
+            // practice means `--device VID:PID`.
+            //
+            // Deliberately NOT Link::Dongle: that selects the receiver's own
+            // protocol. Something reached here by confirming the wired config
+            // block is speaking the wired protocol, whatever it is plugged into.
+            //
+            // `skip_probe` hardware is the exception. A receiver is recognised
+            // by its device id alone and speaks a protocol with no feature
+            // reports, so the wired probe cannot confirm it — it only stalls
+            // the receiver for the kernel's full control timeout and knocks its
+            // vendor channel out (see docs/PROTOCOL.md). Keep it away from the
+            // prober; `dongle::discover` owns it.
+            if spec.opts.skip_probe.contains(&id) {
+                continue;
+            }
             found
                 .entry((id.vid, id.pid))
                 .or_insert((id, Link::Unknown, Confidence::Known));
@@ -365,6 +385,11 @@ fn targets(all: &[&DeviceInfo], spec: &ScanSpec<'_>) -> Vec<(DeviceId, Link, Con
                 continue;
             }
             if found.contains_key(&(id.vid, id.pid)) {
+                continue;
+            }
+            // A receiver is keyboard-shaped and has vendor collections, so a
+            // deep scan would otherwise probe it and stall its own channel.
+            if spec.opts.skip_probe.contains(&id) {
                 continue;
             }
             if !spec.opts.include_non_keyboards && !is_keyboard_shaped(all, id) {

@@ -1007,7 +1007,10 @@ impl App {
                         layout,
                         &mut preview,
                     );
-                    preview_status = if draft.mode == 1 {
+                    preview_status = if draft.mode == 6 {
+                        theme::muted(ui, "This firmware effect has no preview yet. Its saved settings can still be read and restored.");
+                        "Preview unavailable for firmware mode 6"
+                    } else if draft.mode == 1 {
                         "Illustrative static preview"
                     } else {
                         ui.ctx()

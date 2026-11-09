@@ -63,6 +63,26 @@ fn scan_spec<'a>(opts: &'a ScanOptions) -> ScanSpec<'a> {
     }
 }
 
+/// The wired scan must not probe a 2.4 GHz receiver.
+///
+/// `Keyboard::discover` runs the F75 scan before the receiver one, and a
+/// `--device 3554:fa09` lands that id in the allow list. The receiver has a
+/// vendor-usage collection, so the wired prober opens it and sends a 520-byte
+/// feature report — a packet shape the receiver has no report for. The kernel
+/// waits out its full control timeout (~5 s), and the stall knocks the
+/// receiver's own output-report channel out, so the very scan that just listed
+/// the receiver leaves it unable to answer. Measured: 8/8 vendor roundtrips
+/// healthy, then a single wired probe broke the next two.
+///
+/// Receivers are resolved by id in [`crate::dongle`], never by probing.
+pub fn skip_probe_ids(allow: &[crate::DeviceId]) -> Vec<crate::DeviceId> {
+    allow
+        .iter()
+        .copied()
+        .filter(|id| crate::dongle::KNOWN.contains(id))
+        .collect()
+}
+
 /// Confirm a probed collection really is an AULA board.
 ///
 /// Reads the config block and checks the `5A A5` signature. `0x84` is a read
@@ -408,6 +428,25 @@ mod tests {
     use super::*;
     use crate::color::Rgb;
 
+    /// A named receiver must never be handed to the wired prober.
+    ///
+    /// `Keyboard::discover` runs this scan before `dongle::discover`, and the
+    /// probe sends a 520-byte feature report that stalls a receiver for the
+    /// kernel's control timeout and knocks out its output-report channel. The
+    /// user-visible effect was `keylux onboard status` losing the device it had
+    /// just successfully listed.
+    #[test]
+    fn receivers_are_never_wired_probed() {
+        let receiver = crate::dongle::KNOWN[0];
+        assert_eq!(skip_probe_ids(&[receiver]), vec![receiver]);
+
+        // The wired board is not a receiver, so it stays probeable.
+        let wired = p::WIRED;
+        assert!(skip_probe_ids(&[wired]).is_empty());
+
+        // Mixed list: only the receiver drops out.
+        assert_eq!(skip_probe_ids(&[wired, receiver]), vec![receiver]);
+    }
     /// Encoding is pure, so it can be tested without hardware.
     fn encode_static_with(order: ChannelOrder, frame: &Frame) -> Vec<u8> {
         let mut buf = vec![0u8; p::STATIC_LEN];

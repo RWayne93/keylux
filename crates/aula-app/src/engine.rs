@@ -304,6 +304,7 @@ fn run(
     let mut last_rescan = Instant::now();
 
     let mut opts = ScanOptions {
+        skip_probe: aula_protocol::f75::skip_probe_ids(&allow),
         allow,
         ..Default::default()
     };
@@ -455,6 +456,7 @@ fn run(
                     shared.lock().unwrap().scanning = true;
                     repaint();
                     let wide = ScanOptions {
+                        skip_probe: aula_protocol::f75::skip_probe_ids(&opts.allow),
                         allow: opts.allow.clone(),
                         deep,
                         include_non_keyboards: false,

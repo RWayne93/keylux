@@ -13,6 +13,9 @@ pub const EFFECTS: &[(u16, &str)] = &[
     (3, "Dream Rainbow"),
     (4, "Instant Trigger"),
     (5, "Rain Walk"),
+    // Observed as the active mode in two matching, validated receiver reads.
+    // Its factory name and animation have not been identified.
+    (6, "Firmware mode 6"),
     (7, "Ripple Spread"),
     (8, "Starry Sky"),
     (10, "Flowing Stream"),
@@ -111,7 +114,9 @@ impl ConfigBlock {
 
     pub fn settings_for(&self, mode: u16) -> Result<LightingSettings> {
         if !EFFECTS.iter().any(|(id, _)| *id == mode) {
-            return Err(invalid("unrecognized firmware mode; no settings changed"));
+            return Err(invalid(&format!(
+                "unrecognized firmware mode {mode}; no settings changed"
+            )));
         }
         let (brightness, speed, multicolor) = if mode == 0 || mode == 277 {
             (0, 0, true)
@@ -279,6 +284,28 @@ mod tests {
     }
 
     #[test]
+    fn receiver_mode_six_can_be_read_and_restored_without_changing_other_bytes() {
+        let mut bytes = *config().bytes();
+        // Fields observed in two matching live receiver reads, 2026-11-09.
+        bytes[9..11].copy_from_slice(&[0, 6]);
+        bytes[68..70].copy_from_slice(&[2, 0x37]);
+        let c = ConfigBlock::parse(&bytes).unwrap();
+        let original = c.active().unwrap();
+        assert_eq!(
+            original,
+            LightingSettings {
+                mode: 6,
+                brightness: 2,
+                speed: 3,
+                multicolor: true,
+            }
+        );
+        assert_eq!(c.with_settings(original).unwrap().bytes(), &bytes);
+        let switched = c.with_settings(c.settings_for(11).unwrap()).unwrap();
+        assert_eq!(switched.with_settings(original).unwrap().bytes(), &bytes);
+    }
+
+    #[test]
     fn truncated_corrupted_and_unfamiliar_configs_are_rejected() {
         let c = config();
         assert!(ConfigBlock::parse(&c.bytes()[..114]).is_err());
@@ -289,7 +316,7 @@ mod tests {
         b[56] = 0;
         assert!(ConfigBlock::parse(&b).is_err());
         let mut settings = c.active().unwrap();
-        settings.mode = 6;
+        settings.mode = 0xffff;
         assert!(c.with_settings(settings).is_err());
         settings.mode = 11;
         settings.speed = 16;
@@ -320,7 +347,7 @@ mod tests {
             assembled = reply.push(&frame).unwrap();
         }
         let state = OnboardLighting::from_readbacks(&config(), &assembled.unwrap()).unwrap();
-        assert_eq!(state.palettes.len(), 14);
+        assert_eq!(state.palettes.len(), 15);
         let expected = [
             Rgb::new(255, 0, 0),
             Rgb::new(0, 255, 0),
